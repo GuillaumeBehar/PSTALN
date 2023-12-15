@@ -1,6 +1,6 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
-from conllu import parse_incr, parse
+from torch.utils.data import Dataset
+from conllu import parse
 import json
 
 class Textdata(Dataset):
