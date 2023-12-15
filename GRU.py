@@ -4,9 +4,9 @@ import json
 
 ########################################################################
 
-try :
+if torch.cuda.is_available():
     device = torch.device("cuda")
-except :    
+else :    
     device = torch.device("cpu")
 
 ########################################################################
@@ -38,6 +38,7 @@ class GRU(torch.nn.Module):
         self.hidden_dim = parameters.hidden_dim
         self.n_layers = parameters.n_layers
         self.drop_prob = parameters.drop_prob
+
         self.emb = torch.nn.Embedding(parameters.output_dim, parameters.embedding_dim)
         self.gru = torch.nn.GRU(parameters.embedding_dim, parameters.hidden_dim, parameters.n_layers, batch_first=True, dropout=parameters.drop_prob if parameters.n_layers > 1 else 0)
         self.do = torch.nn.Dropout(p=parameters.drop_prob)
@@ -53,10 +54,16 @@ class GRU(torch.nn.Module):
     
     def predict(self, word, letter_dict_path):
         letter_dict = json.load(open(letter_dict_path,'r',encoding='utf-8'))
-        letters_w = torch.tensor([letter_dict[i] for i in word if i in self.dict])
+        pad = letter_dict["#"]
+        letters_w = torch.tensor([letter_dict[i] for i in word if i in letter_dict] + [pad] * 6)
         out, h = self.forward(letters_w)
-        
-        
+        out = torch.argmax(out, dim=1)
+        letter = letter_dict.keys()
+        predicted_word = ""
+        for index in out :
+            predicted_word += letter[int(index)]
+        return predicted_word
+    
     def train(self, LX, LY):
         nb_iter = self.nb_iter
         optim = torch.optim.Adam(self.parameters())
