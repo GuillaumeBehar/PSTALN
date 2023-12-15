@@ -5,7 +5,7 @@ from dataloader import Textdata
 from GRU import *
 
 # Chemin vers votre fichier de données et votre fichier de dictionnaire
-train_file_path = "UD_French-Sequoia/fr_sequoia-ud-train.conllu"
+train_file_path = "UD_French-Sequoia/fr_gsd-ud-train.conllu"
 letter_dict_path = "letter_dict_fr.json"
 
 # Création de votre Dataset
@@ -29,7 +29,14 @@ print("")
 
 ##################################################
 
-vocabsize = len(dataset.dict)+1
-parameters = GRUParameters(vocabsize)
-model = GRU(parameters)
+vocabsize = len(dataset.dict)
+parameters = GRUParameters(letter_dict_path, vocabsize)
+
+try :
+    model = torch.load("pretrained_v1.pth")
+except :
+    model = GRU(parameters)
+
+print(model.parameters_number())
 model.train_loop(dataset, 1)
+    

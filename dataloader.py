@@ -16,6 +16,7 @@ class Textdata(Dataset):
         examples = []
         c=0
         pad = self.dict["#"]
+        print(len(self.sentences))
         for sentence in self.sentences:
             for token in sentence:
                 word = token['form']
