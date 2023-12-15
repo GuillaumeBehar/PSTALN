@@ -1,3 +1,4 @@
+import torch
 from torch.utils.data import Dataset, DataLoader
 from conllu import parse_incr, parse
 import json
@@ -13,6 +14,8 @@ class Textdata(Dataset):
 
     def get_listofwords(self):
         examples = []
+        c=0
+        pad = self.dict["#"]
         for sentence in self.sentences:
             for token in sentence:
                 word = token['form']
@@ -22,12 +25,17 @@ class Textdata(Dataset):
                 lw = len(letters_w)
                 ll = len(letters_l)
                 if ll<lw:
-                    letters_l += [82] * 6
-                    letters_w += [82] * (ll + 6 - lw)
+                    letters_l += [pad] * 6
+                    letters_w += [pad] * (ll + 6 - lw)
                 else:
-                    letters_w += [82] * 6
-                    letters_l += [82] * (lw + 6 - ll)
-                examples.append((letters_w,letters_l))
+                    letters_w += [pad] * 6
+                    letters_l += [pad] * (lw + 6 - ll)
+                if len(letters_l) == len(letters_w):
+                    examples.append(torch.stack((torch.tensor(letters_w), torch.tensor(letters_l))))
+                else:
+                    print(f'mot ignoré:{word, lemma}')
+                    c += 1
+        print(f'nombre de mots ignorés: {c}')
         return examples
 
     def __getitem__(self, idx):
