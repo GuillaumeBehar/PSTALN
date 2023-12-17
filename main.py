@@ -12,10 +12,10 @@ letter_dict_path = "letter_dict_fr.json"
 dataset = Textdata(train_file_path, letter_dict_path)
 
 print("")
-print("Taille du dataset d'entrainement :", len(dataset))
+print("Taille du dataset d'entrainement :", len(dataset.data))
 
 # Création du DataLoader
-batch_size = 1 # Définissez la taille du batch selon votre besoin
+batch_size = 2 # Définissez la taille du batch selon votre besoin
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 print("")
@@ -30,13 +30,14 @@ print("")
 ##################################################
 
 vocabsize = len(dataset.dict)
-parameters = GRUParameters(letter_dict_path, vocabsize)
+parameters = GRUParameters(letter_dict_path, vocabsize, n_layers=2, is_bidirectional=True)
 
 try :
-    model = torch.load("pretrained_v1.pth")
+    model = torch.load("100emb_64hidden_2layer_bidirectional.pt")
 except :
     model = GRU(parameters)
 
-print(model.parameters_number())
-model.train_loop(dataset, 1)
+print("Nombre de paramètres du model:", model.parameters_number())
+
+#model.train_loop(dataset, 30)
     

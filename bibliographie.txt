@@ -1,0 +1,1 @@
+R, Lambert. « Comprendre le fonctionnement d’un LSTM et d’un GRU en schémas ». Pensée Artificielle, 9 octobre 2019, https://penseeartificielle.fr/comprendre-lstm-gru-fonctionnement-schema/

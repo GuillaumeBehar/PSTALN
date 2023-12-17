@@ -1,9 +1,9 @@
 
 import torch
 import json
-from torch.nn.parameter import Parameter
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from colorama import Fore, Style
 
 ########################################################################
 
@@ -13,7 +13,7 @@ class GRUParameters:
     """
     # Example usage:
     # gru_params = GRUParameters(output_dim=10, hidden_dim=128, embedding_dim=64, drop_prob=0.3, n_layers=2)
-    def __init__(self, letter_dict_path: str, output_dim: int, hidden_dim: int = 64, embedding_dim: int = 50, drop_prob: float = 0.2, n_layers: int = 1):
+    def __init__(self, letter_dict_path: str, output_dim: int, hidden_dim: int = 64, embedding_dim: int = 100, drop_prob: float = 0.2, n_layers: int = 1, is_bidirectional: bool= False):
         """
         Initializes the GRUParameters instance.
 
@@ -31,6 +31,7 @@ class GRUParameters:
         self.output_dim = output_dim
         self.drop_prob = drop_prob
         self.n_layers = n_layers
+        self.is_bidirectional = is_bidirectional
 
 
 
@@ -60,6 +61,7 @@ class GRU(torch.nn.Module):
         self.hidden_dim = parameters.hidden_dim
         self.n_layers = parameters.n_layers
         self.drop_prob = parameters.drop_prob
+        self.is_bidirectional = parameters.is_bidirectional
 
         # Define model components
         self.emb = torch.nn.Embedding(parameters.output_dim, parameters.embedding_dim)
@@ -68,11 +70,11 @@ class GRU(torch.nn.Module):
             parameters.hidden_dim,
             parameters.n_layers,
             batch_first=True,
-            bidirectional=False,
+            bidirectional=self.is_bidirectional,
             dropout=parameters.drop_prob if parameters.n_layers > 1 else 0
         )
         self.do = torch.nn.Dropout(p=parameters.drop_prob)
-        self.fc = torch.nn.Linear(parameters.hidden_dim, parameters.output_dim)
+        self.fc = torch.nn.Linear((2 if self.is_bidirectional else 1)*parameters.hidden_dim, parameters.output_dim)
         self.relu = torch.nn.ReLU()
         
 ###################
@@ -133,7 +135,7 @@ class GRU(torch.nn.Module):
         # Convert indices back to letters using the letter dictionary
         letter = list(letter_dict.keys())
         predicted_word = "".join([letter[int(index)] for index in out])
-        return predicted_word
+        return predicted_word.replace("#","")
     
     def validate(self, dataloader):
         """
@@ -154,17 +156,24 @@ class GRU(torch.nn.Module):
 
         total_loss = 0.0
         correct_predictions = 0
+        flechies = 0
+        correct_predictions_flechies = 0
         total_samples = 0
 
         with torch.no_grad():  # Disable gradient computation during validation
-            for _, batch in enumerate(dataloader):
-                for example in batch:
+            for _, batch in enumerate(tqdm(dataloader, desc="Validating")):
+                batch = batch.to(self.device)
+                x, y = batch[:,0], batch[:,1]
+
+                # Forward pass
+                Y_prime, h = self.forward(x)
+
+                for i, example in enumerate(batch):
                     x, y = example[0].to(self.device), example[1].to(self.device)
+                    y_prime = Y_prime[i]
 
                     # Ensure input and target sizes match
                     if x.size(0) == y.size(0):
-                        # Forward pass
-                        y_prime, _ = self.forward(x)
 
                         # Calculate loss
                         loss = loss_function(y_prime, y)
@@ -172,16 +181,24 @@ class GRU(torch.nn.Module):
 
                         # Calculate accuracy
                         predicted_labels = torch.argmax(y_prime, dim=1)
-                        correct_predictions += torch.sum(predicted_labels == y).item()
+                        if torch.equal(predicted_labels, y) :
+                            correct_predictions += torch.sum(predicted_labels == y).item()
+                        
+                        if not torch.equal(x, y) :
+                            if torch.equal(predicted_labels, y):
+                                correct_predictions_flechies += torch.sum(predicted_labels == y).item()
+                        
+                            flechies += y.size(0)
 
                         total_samples += y.size(0)
 
         # Calculate average loss and accuracy
         avg_loss = total_loss / total_samples
         accuracy = correct_predictions / total_samples
+        accuracy_flechies = correct_predictions_flechies / flechies
 
         # Print validation results
-        print(f"Loss: {avg_loss:.4f}, Accuracy: {accuracy * 100:.2f}%")
+        print(f"Loss: {Fore.RED}{avg_loss:.4f}{Style.RESET_ALL}, Accuracy: {Fore.GREEN}{accuracy * 100:.2f}%{Style.RESET_ALL}, Accuracy Flechies: {Fore.BLUE}{accuracy_flechies * 100:.2f}%{Style.RESET_ALL}")
 
         return avg_loss, accuracy
     
@@ -201,23 +218,24 @@ class GRU(torch.nn.Module):
 
         # Iterate over batches in the dataloader
         for i, batch in enumerate(tqdm(dataloader, desc="Training")):
-            for example in batch:
-                x, y = example[0].to(self.device), example[1].to(self.device)
+            batch = batch.to(self.device)
+            x, y = batch[:,0], batch[:,1]
 
-                # Ensure input and target sizes match
-                if x.size(0) == y.size(0):
-                    # Zero the gradients
-                    optimizer.zero_grad()
+            # Zero the gradients
+            optimizer.zero_grad()
 
-                    # Forward pass
-                    y_prime, h = self.forward(x)
+            # Forward pass
+            y_prime, h = self.forward(x)
 
-                    # Calculate loss
-                    loss = loss_function(y_prime, y)
+            y = torch.flatten(y, end_dim=1)
+            y_prime = torch.flatten(y_prime, end_dim=1)
 
-                    # Backward pass and optimization step
-                    loss.backward()
-                    optimizer.step()
+            # Calculate loss for the entire batch
+            loss = loss_function(y_prime, y)
+
+            # Backward pass and optimization step
+            loss.backward()
+            optimizer.step()
             
 
     def train_loop(self, dataset, nb_epoch):
@@ -235,21 +253,33 @@ class GRU(torch.nn.Module):
 
         data = dataset.data
 
+        train_set, test_set = torch.utils.data.random_split(data, [int(len(data) * 0.95), len(data) - int(len(data) * 0.95)])
+        test_loader = DataLoader(dataset=test_set, shuffle=False, batch_size=4096)
+
         for epoch_number in range(nb_epoch):
+
             # Split the dataset into training and validation subsets
-            train_subset, val_subset = torch.utils.data.random_split(data, [int(len(data) * 0.9), len(data) - int(len(data) * 0.9)])
+            train_subset, val_subset = torch.utils.data.random_split(train_set, [int(len(train_set) * 0.95), len(train_set) - int(len(train_set) * 0.95)])
 
             # Create dataloaders for training and validation
-            train_loader = DataLoader(dataset=train_subset, shuffle=True, batch_size=1)
-            val_loader = DataLoader(dataset=val_subset, shuffle=False, batch_size=1)
+            train_loader = DataLoader(dataset=train_subset, shuffle=True, batch_size=4096)
+            val_loader = DataLoader(dataset=val_subset, shuffle=False, batch_size=4096)
 
-            print(f'EPOCH {epoch_number + 1}:')
+            print("")    
+            print(f'{Fore.GREEN}EPOCH {epoch_number + 1}:{Style.RESET_ALL}')
             
             # Train for one epoch
             self.train_one_epoch(train_loader)
 
             # Validate on the validation subset
+            print(f'{Fore.CYAN}Validation :{Style.RESET_ALL}')
             self.validate(val_loader)
+            print(f'{Fore.YELLOW}Test :{Style.RESET_ALL}')
+            self.validate(test_loader)
+
+    def save(self):
+        filename = f"{self.embedding_dim}emb_{self.hidden_dim}hidden_{self.n_layers}layer"+("_bidirectional" if self.is_bidirectional else None)+".pt" 
+        torch.save(self, filename)
 
 ########################################################################
 
