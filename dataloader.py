@@ -13,7 +13,7 @@ class Textdata(Dataset):
         return len(self.sentences)
 
     def get_listofwords(self):
-        examples = []
+        examples = [[],[]]
         c=0
         pad = self.dict["#"]
         for sentence in self.sentences:
@@ -31,12 +31,17 @@ class Textdata(Dataset):
                     letters_w += [pad] * 6
                     letters_l += [pad] * (lw + 6 - ll)
                 if len(letters_l) == len(letters_w):
-                    examples.append(torch.stack((torch.tensor(letters_w), torch.tensor(letters_l))))
+                    examples[0].append(torch.tensor(letters_w))
+                    examples[1].append(torch.tensor(letters_l))
                 else:
                     print(f'mot ignoré:{word, lemma}')
                     c += 1
         print(f'nombre de mots ignorés: {c}')
-        return examples
+
+        examples[0] = torch.nn.utils.rnn.pad_sequence(examples[0], batch_first=True, padding_value=0)
+        examples[1] = torch.nn.utils.rnn.pad_sequence(examples[1], batch_first=True, padding_value=0)
+
+        return [torch.stack((examples[0][k],examples[1][k])) for k in range(len(examples[0]))]
 
     def __getitem__(self, idx):
         return self.data[idx]

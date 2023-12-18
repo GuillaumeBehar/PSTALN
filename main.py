@@ -5,17 +5,17 @@ from dataloader import Textdata
 from GRU import *
 
 # Chemin vers votre fichier de données et votre fichier de dictionnaire
-train_file_path = "UD_French-Sequoia/fr_sequoia-ud-train.conllu"
+train_file_path = "UD_French-Sequoia/fr_gsd-ud-train.conllu"
 letter_dict_path = "letter_dict_fr.json"
 
 # Création de votre Dataset
 dataset = Textdata(train_file_path, letter_dict_path)
 
 print("")
-print("Taille du dataset d'entrainement :", len(dataset))
+print("Taille du dataset d'entrainement :", len(dataset.data))
 
 # Création du DataLoader
-batch_size = 1 # Définissez la taille du batch selon votre besoin
+batch_size = 2 # Définissez la taille du batch selon votre besoin
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 print("")
@@ -29,7 +29,15 @@ print("")
 
 ##################################################
 
-vocabsize = len(dataset.dict)+1
-parameters = GRUParameters(vocabsize)
-model = GRU(parameters)
-model.train_loop(dataset, 1)
+vocabsize = len(dataset.dict)
+parameters = GRUParameters(letter_dict_path, vocabsize, n_layers=2, is_bidirectional=True)
+
+try :
+    model = torch.load("100emb_64hidden_2layer_bidirectional.pt")
+except :
+    model = GRU(parameters)
+
+print("Nombre de paramètres du model:", model.parameters_number())
+
+#model.train_loop(dataset, 30)
+    
