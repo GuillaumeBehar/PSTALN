@@ -1,7 +1,7 @@
 from io import open
 from conllu import parse
 from torch.utils.data import DataLoader
-from dataloader import Textdata
+from dataProcessing import LemmaData
 from GRU import *
 
 # Chemin vers votre fichier de données et votre fichier de dictionnaire
@@ -9,7 +9,7 @@ train_file_path = "UD_French-Sequoia/fr_gsd-ud-train.conllu"
 letter_dict_path = "letter_dict_fr.json"
 
 # Création de votre Dataset
-dataset = Textdata(train_file_path, letter_dict_path)
+dataset = LemmaData(train_file_path, letter_dict_path)
 
 print("")
 print("Taille du dataset d'entrainement :", len(dataset.data))
