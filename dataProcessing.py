@@ -104,10 +104,7 @@ def replaceRareWords(conlluFileName, wordThreshold, newfileName):
                 form = token['form']
                 wordCounts[form] = wordCounts.get(form, 0) + 1
 
-    # Appliquer des seuils en fonction de ces stats
     wordsReplaced = 0
-    wordsChanged = 0
-
     with open(newfileName, "w", encoding="utf-8") as new_file:
         with open(conlluFileName, "r", encoding="utf-8") as data_file:
             for sentence in parse_incr(data_file):
@@ -122,13 +119,66 @@ def replaceRareWords(conlluFileName, wordThreshold, newfileName):
                             token['misc'] = {"OrigForm": form}
 
                 new_file.write(TokenList(sentence).serialize() + '\n')
+    print(f'nombre de mots remplacés par <UNK>:{wordsReplaced}')
+
+def oov_proportion(file):
+    total = 0
+    oov = 0
+    with open(file, "r", encoding="utf-8") as corpus:
+        for sentence in parse_incr(corpus):
+            for token in sentence:
+                total += 1
+                if token['form'] == '<UNK>':
+                    oov += 1
+    return oov/total * 100
+
+def oov_proportion_from_dict(file,dictionary):
+    total = 0
+    oov = 0
+    with open(file, "r", encoding="utf-8") as corpus:
+        for sentence in parse_incr(corpus):
+            for token in sentence:
+                total += 1
+                if not token['form'] in dictionary:
+                    oov += 1
+    return oov / total * 100
+
+class EmbForPosData(Dataset):
+    def __init__(self, train_file_path, falseWord_proportion = int):
+        self.sentences = parse(open(train_file_path,'r', encoding="utf-8").read())
+        self.data,self.dict = get_PosForEmbList(self.sentences,UDTagSet())
+        self.falseWord_prop = falseWord_proportion
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+    def get_dict(self):
+        return self.dict
+
+def get_PosForEmbList(sentences, dicoUpos) :
+    dicoVocab = collections.defaultdict(lambda: len(dicoVocab))
+    words =[]
+    pos =[]
+    c = 0
+    for sentence in sentences:
+        c+=1
+        for token in sentence :
+            words.append(dicoVocab[token['form']])
+            pos.append(dicoUpos[token['upos']])
+        if len(words) != len(pos):
+            print(f'problème à la phrase {c}')
+    tokens = torch.tensor(words)
+    labels = torch.tensor(pos)
+    data = [torch.stack((tokens[k], labels[k])) for k in range(len(words))]
+    return data, dicoVocab
+
 
 if __name__== '__main__':
-    train_file_path = "UD_French-Sequoia/fr_sequoia-ud-train.conllu"
-    newfile = 'files/train10.conllu'
-    word_threshold = 10
-    replaceRareWords(train_file_path,wordThreshold=word_threshold,newfileName=newfile)
-
-    pos_dataset = PosData(newfile)
-    dico = dict(pos_dataset.get_dict())
-    print(len(dico))
+    train_file_path = "UD_French/fr_gsd-ud-train.conllu"
+    newfile = 'files/gsd-train10.conllu'
+    word_threshold = 20
+    #replaceRareWords(train_file_path,wordThreshold=word_threshold,newfileName=newfile)
+    print(oov_proportion(newfile))

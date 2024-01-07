@@ -5,7 +5,7 @@ from dataProcessing import LemmaData
 from GRU import *
 
 # Chemin vers votre fichier de données et votre fichier de dictionnaire
-train_file_path = "UD_French-Sequoia/fr_gsd-ud-train.conllu"
+train_file_path = "UD_French/fr_gsd-ud-train.conllu"
 letter_dict_path = "files/letter_dict_fr.json"
 
 # Création de votre Dataset

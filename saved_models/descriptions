@@ -1,0 +1,28 @@
+Model descriptions
+
+#####
+Embedding for POS Classification
+#####
+
+    -embforpos1
+embedding_size=200, hidden_size=100,output_size=19, dropout_rate=0.5
+
+    -embforpos2
+embedding_size=50, hidden_size=30,output_size=19, dropout_rate=0.5
+
+#####
+POS Tagging models
+#####
+
+    -posTagging1
+Unidirectional GRU-based POS tagging model
+Trained on 'fr_sequoia-ud-train.conll' dataset, removing words with fewer than 10 occurrences
+Parameters: Embedding size of 100, hidden layer size of 50.
+Vocabulary size :593, training tokens :2231
+
+    -posTagging2
+Unidirectional GRU-based POS tagging model
+Trained on 'fr_gsd-ud-train.conll' dataset, removing words with fewer than 10 occurrences
+Parameters: Embedding size of 100, hidden layer size of 50.
+Vocabulary size :1813, training tokens:16681
+########################################################################################################################
