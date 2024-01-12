@@ -1,12 +1,15 @@
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from conllu import parse, parse_incr, TokenList
+from torch.nn.utils.rnn import pad_sequence
 import json
 import collections
 from UDTagSet import UDTagSet
 
 class LemmaData(Dataset):
-    def __init__(self, train_file_path,dict_path):
+    def __init__(self,
+                 train_file_path,
+                 dict_path):
         self.sentences = parse(open(train_file_path,'r', encoding="utf-8").read())
         self.dict = json.load(open(dict_path,'r',encoding='utf-8'))
         self.data = get_lemmaList(self.sentences, self.dict)
@@ -45,8 +48,8 @@ def get_lemmaList(sentences, char_dict):
                 c += 1
     print(f'nombre de mots ignorés: {c}')
 
-    examples = torch.nn.utils.rnn.pad_sequence(forms, batch_first=True, padding_value=pad)
-    labels = torch.nn.utils.rnn.pad_sequence(lemmas, batch_first=True, padding_value=pad)
+    examples = pad_sequence(forms, batch_first=True, padding_value=pad)
+    labels = pad_sequence(lemmas, batch_first=True, padding_value=pad)
 
     return [torch.stack((examples[k], labels[k])) for k in range(len(examples))]
 
@@ -68,28 +71,84 @@ class PosData(Dataset):
 
 def get_posList(sentences, dicoUpos) :
     dicoVocab = collections.defaultdict(lambda: len(dicoVocab))
+    word_pad = len(dicoVocab)
+    pos_pad = dicoUpos["PAD"]
     forms =[]
-    parts_os =[]
-    c = 0
+    labels =[]
     for sentence in sentences:
         words = []
         pos = []
-        c+=1
+        c = 0
         for token in sentence :
             words.append(dicoVocab[token['form']])
             pos.append(dicoUpos[token['upos']])
-        if len(words) != len(pos):
-            print(f'problème à la phrase {c}')
-        forms.append(torch.tensor(words))
-        parts_os.append(torch.tensor(pos))
-
-    word_pad = len(dicoVocab)
-    pos_pad = dicoUpos["PAD"]
-    examples = torch.nn.utils.rnn.pad_sequence(forms, batch_first=True, padding_value=word_pad)
-    labels = torch.nn.utils.rnn.pad_sequence(parts_os, batch_first=True, padding_value=pos_pad)
-    data = [torch.stack((examples[k], labels[k])) for k in range(len(forms))]
+            c += 1
+            if c == 10:
+                forms.append(torch.tensor(words))
+                labels.append(torch.tensor(pos))
+                words = []
+                pos = []
+                c = 0
+        if c > 2:
+            words.extend([word_pad]*(10-c))
+            pos.extend([pos_pad]*(10-c))
+            forms.append(torch.tensor(words))
+            labels.append(torch.tensor(pos))
+    data = [torch.stack((forms[k], labels[k])) for k in range(len(forms))]
 
     return data, dicoVocab
+
+class PosDataforCNN(Dataset):
+    def __init__(self, train_file_path, char_dict):
+        self.sentences = parse(open(train_file_path, 'r', encoding="utf-8").read())
+        self.data, self.word_dict = get_pos_char_List(self.sentences, char_dict, UDTagSet())
+
+    def __len__(self):
+        formseq,labelseq = self.data
+        return len(formseq)
+
+    def __getitem__(self, idx):
+        formseq, labelseq = self.data
+        return (formseq[idx],labelseq[idx])
+
+    def get_dict(self):
+        return self.dict
+
+
+def get_pos_char_List(sentences,char_dict, pos_dict):
+    word_dict = collections.defaultdict(lambda: len(word_dict))
+    char_pad = '#'
+    word_pad = len(word_dict)
+    pos_pad = pos_dict["PAD"]
+    forms =[]
+    labels =[]
+    for sentence in sentences:
+        words = []
+        pos = []
+        c = 0
+        for token in sentence:
+            word = token['form']
+            char = [char_dict[i] if i in char_dict else char_dict["U+FFD"] for i in word]
+            words.append(torch.tensor([word_dict[word]]+char))
+            pos.append(pos_dict[token['upos']])
+            c += 1
+            if c == 10:
+                padded_words = pad_sequence(words, batch_first=True, padding_value=char_dict[char_pad])
+                forms.append(padded_words)
+                labels.append(torch.tensor(pos))
+                words = []
+                pos = []
+                c = 0
+        if c > 2:
+            words.extend([torch.tensor([word_pad])] * (10 - c))
+            pos.extend([pos_pad] * (10 - c))
+            padded_words = pad_sequence(words, batch_first=True, padding_value=char_dict[char_pad])
+            forms.append(padded_words)
+            labels.append(torch.tensor(pos))
+
+    #data = [torch.stack((forms[k], labels[k])) for k in range(len(forms))]
+
+    return (forms, labels), word_dict
 
 
 def replaceRareWords(conlluFileName, wordThreshold, newfileName):
@@ -143,11 +202,12 @@ def oov_proportion_from_dict(file,dictionary):
                     oov += 1
     return oov / total * 100
 
-class EmbForPosData(Dataset):
-    def __init__(self, train_file_path, falseWord_proportion = int):
-        self.sentences = parse(open(train_file_path,'r', encoding="utf-8").read())
-        self.data,self.dict = get_PosForEmbList(self.sentences,UDTagSet())
-        self.falseWord_prop = falseWord_proportion
+
+class LemmaPosData(Dataset):
+    def __init__(self,
+                 train_file_path):
+            self.sentences = parse(open(train_file_path, 'r', encoding="utf-8").read())
+            self.data = get_sentenceList(self.sentences)
 
     def __len__(self):
         return len(self.data)
@@ -155,30 +215,35 @@ class EmbForPosData(Dataset):
     def __getitem__(self, idx):
         return self.data[idx]
 
-    def get_dict(self):
-        return self.dict
-
-def get_PosForEmbList(sentences, dicoUpos) :
-    dicoVocab = collections.defaultdict(lambda: len(dicoVocab))
-    words =[]
-    pos =[]
+def get_sentenceList(sentences):
+    forms = []
+    lemmas = []
     c = 0
     for sentence in sentences:
-        c+=1
-        for token in sentence :
-            words.append(dicoVocab[token['form']])
-            pos.append(dicoUpos[token['upos']])
-        if len(words) != len(pos):
-            print(f'problème à la phrase {c}')
-    tokens = torch.tensor(words)
-    labels = torch.tensor(pos)
-    data = [torch.stack((tokens[k], labels[k])) for k in range(len(words))]
-    return data, dicoVocab
+        words = []
+        lemma = []
+        for token in sentence:
+            words.append(token['form'])
+            lemma.append(token['lemma'])
+        forms.append(words)
+        lemmas.append(lemma)
+
+    pad = 'PAD'
+    examples = torch.nn.utils.rnn.pad_sequence(forms, batch_first=True, padding_value=pad)
+    labels = torch.nn.utils.rnn.pad_sequence(lemmas, batch_first=True, padding_value=pad)
+    return [torch.stack((examples[k], labels[k])) for k in range(len(examples))]
 
 
 if __name__== '__main__':
-    train_file_path = "UD_French/fr_gsd-ud-train.conllu"
-    newfile = 'files/gsd-train10.conllu'
-    word_threshold = 20
-    #replaceRareWords(train_file_path,wordThreshold=word_threshold,newfileName=newfile)
-    print(oov_proportion(newfile))
+    #file = 'UD_French/fr_sequoia-ud-train.conllu'
+    #replaceRareWords(file, 10,'sequoia-train10.conllu')
+
+    train_file_path = "UD_French/fr_sequoia-ud-test.conllu"  # Remplacez par le chemin de votre fichier
+    with open('files/letter_dict_fr.json', 'r', encoding='utf-8') as f:
+        char_dict = json.load(f)
+
+    dataset = PosDataforCNN(train_file_path, char_dict)
+    print(len(dataset))
+    print(dataset[5])
+    #print(dataset.get_dict())
+

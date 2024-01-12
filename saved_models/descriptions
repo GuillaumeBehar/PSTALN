@@ -25,4 +25,22 @@ Unidirectional GRU-based POS tagging model
 Trained on 'fr_gsd-ud-train.conll' dataset, removing words with fewer than 10 occurrences
 Parameters: Embedding size of 100, hidden layer size of 50.
 Vocabulary size :1813, training tokens:16681
+
+    -posTagging3
+GRUNet(input_dim = 50, hidden_dim=30,output_dim=19,vocabSize=len(dico)+1)
+
+    -posTagging4
+model = BiGRUNet(input_dim=100, hidden_dim=50, output_dim=19, vocabSize=len(dico) + 1)
+sur sequoia train5
+
+    -posTagging5
+model = BiGRUNet(input_dim=150, hidden_dim=50, output_dim=19, vocabSize=len(dico) + 1)
+sur sequoia train10
+
+    -posTagging6
+model = BiGRUNet(input_dim=120, hidden_dim=60, output_dim=19, vocabSize=len(dico) + 1)
+sur gsd
+
+
+
 ########################################################################################################################
