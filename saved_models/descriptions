@@ -41,6 +41,19 @@ sur sequoia train10
 model = BiGRUNet(input_dim=120, hidden_dim=60, output_dim=19, vocabSize=len(dico) + 1)
 sur gsd
 
+    -posTagging8
+model = CNN_GRU(char_vocab_size=len(char_dict)+1,
+                    char_embedding_dim=50,
+                    n_filters=30,
+                    vocab_size=len(dico) + 1,
+                    word_embedding_dim=70,
+                    hidden_dim=50,
+                    output_dim=19,
+                    n_layers=1,
+                    drop_out=0.2,
+                    char_drop_out=0.2,
+                    padding=2)
+sur sequoia train 5: 93.27%
 
 
 ########################################################################################################################

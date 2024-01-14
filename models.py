@@ -130,13 +130,14 @@ class CharEmbedding(nn.Module):
                  padding_idx: int = 0) -> None:
         super(CharEmbedding, self).__init__()
         self.embedding = \
-            nn.Embedding(self.n_chars, embedding_size, padding_idx=padding_idx)
+            nn.Embedding(n_chars, embedding_size, padding_idx=padding_idx)
 
         # Dropout applied to embeddings.
         self.embedding_dropout = \
             nn.Dropout(p=dropout) if dropout else None
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        #print(inputs)
         inputs_emb = self.embedding(inputs)
         # inputs_emb: ``[sent_length x max_word_length x embedding_size]``
         output = self.embedding_dropout(inputs_emb)
@@ -179,20 +180,26 @@ class CNN_GRU(nn.Module):
         self.fc = nn.Linear(2*hidden_dim, output_dim)
         self.relu = nn.ReLU()
 
-        def forward(self, inputs: torch.Tensor):
-            '''
-            inputs is a tensor with shape :sentence_len * [word indice, char indices]
-            '''
-            char_inputs = inputs[:,1:]
-            inputs_emb = self.char_embedding(char_inputs).permute(0, 2, 1)
-            # inputs_emb: ``[sent_length x embedding_size x max_word_length ]``
-            output_cnn = self.cnn(inputs_emb)
-            # output: ``[sent_length x filters x out_length]``
-            output_cnn, _ = torch.max(output_cnn, 2)
-            # output: ``[sent_length x filters]``
-            word_emb = self.emb(inputs[:,0])
-            input = torch.cat((word_emb,output_cnn), dim=1)
-            # input: ``[sent_len * (word_emb_dim + filters)]
-            out, h = self.gru(input)
-            out = self.fc(self.relu(self.do(out)))
-            return out, h
+    def forward(self, inputs: torch.Tensor):
+        '''
+        inputs is a tensor with shape :sentence_len * [word indice, char indices]
+        '''
+        char_inputs = inputs[:,1:]
+        #print(f"dimension de char_inputs: {char_inputs.shape}")
+        inputs_emb = self.char_embedding(char_inputs).permute(0, 2, 1)
+        #print(f"dimension de inputs_emb: {inputs_emb.shape}")
+        # inputs_emb: ``[sent_length x embedding_size x max_word_length ]``
+        output_cnn = self.cnn(inputs_emb)
+        #print(f"dimension de l'output cnn: {output_cnn.shape}")
+        # output: ``[sent_length x filters x out_length]``
+        output_cnn, _ = torch.max(output_cnn, 2)
+        #print(f"dimension de l'output cnn: {output_cnn.shape}")
+        # output: ``[sent_length x filters]``
+        word_emb = self.do(self.word_emb(inputs[:,0]))
+        #print(f"dimension des embeddings: {word_emb.shape}")
+        input = torch.cat((word_emb,output_cnn), dim=1)
+        #print(f"dimension de l'input: {input.shape}")
+        # input: ``[sent_len * (word_emb_dim + filters)]
+        out, h = self.gru(input)
+        out = self.fc(self.relu(self.do(out)))
+        return out, h

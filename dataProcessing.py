@@ -109,17 +109,17 @@ class PosDataforCNN(Dataset):
 
     def __getitem__(self, idx):
         formseq, labelseq = self.data
-        return (formseq[idx],labelseq[idx])
+        return formseq[idx], labelseq[idx]
 
     def get_dict(self):
-        return self.dict
+        return self.word_dict
 
 
 def get_pos_char_List(sentences,char_dict, pos_dict):
     word_dict = collections.defaultdict(lambda: len(word_dict))
-    char_pad = '#'
-    word_pad = len(word_dict)
     pos_pad = pos_dict["PAD"]
+    char_pad = '#'
+    word_pad = word_dict['00PAD']
     forms =[]
     labels =[]
     for sentence in sentences:
@@ -238,12 +238,15 @@ if __name__== '__main__':
     #file = 'UD_French/fr_sequoia-ud-train.conllu'
     #replaceRareWords(file, 10,'sequoia-train10.conllu')
 
-    train_file_path = "UD_French/fr_sequoia-ud-test.conllu"  # Remplacez par le chemin de votre fichier
+    train_file_path = "UD_French/fr_sequoia-ud-train.conllu"  # Remplacez par le chemin de votre fichier
     with open('files/letter_dict_fr.json', 'r', encoding='utf-8') as f:
         char_dict = json.load(f)
 
     dataset = PosDataforCNN(train_file_path, char_dict)
+    data = DataLoader(dataset, batch_size=2, shuffle=False)
     print(len(dataset))
-    print(dataset[5])
-    #print(dataset.get_dict())
+    for batch_idx, batch in enumerate(data):
+        formseq, labelseq = batch
 
+        # Imprimer la taille de chaque batch
+        print(f"Batch {batch_idx + 1}: Formseq size = {formseq.size()}, Labelseq size = {labelseq.size()}")
